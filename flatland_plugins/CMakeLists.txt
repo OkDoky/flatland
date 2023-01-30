@@ -3,7 +3,6 @@ project(flatland_plugins)
 
 # Ensure we're using c++11
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
-set(CMAKE_BUILD_TYPE RelWithDebInfo)
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
@@ -81,7 +80,10 @@ add_library(flatland_plugins_lib
   src/bool_sensor.cpp
   src/world_modifier.cpp
   src/world_random_wall.cpp
-  src/gps.cpp
+  src/gps.cpp  
+  # src/pedsim_movement.cpp
+  # src/triangle_profile.cpp
+  # include/flatland_plugins/walking_profile.h
 )
 
 add_dependencies(flatland_plugins_lib ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})

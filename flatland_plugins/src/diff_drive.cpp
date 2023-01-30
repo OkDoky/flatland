@@ -75,6 +75,10 @@ void DiffDrive::OnInitialize(const YAML::Node& config) {
       reader.Get<std::string>("ground_truth_pub", "odometry/ground_truth");
   std::string twist_pub_topic = reader.Get<std::string>("twist_pub", "twist");
 
+  // init first odom pose
+  std::array<double,3> odom_pose = 
+      reader.GetArray<double,3>("odom_pose",{0.0,0.0,0.0});
+
   // noise are in the form of linear x, linear y, angular variances
   std::vector<double> odom_twist_noise =
       reader.GetList<double>("odom_twist_noise", {0, 0, 0}, 3, 3);
@@ -138,6 +142,11 @@ void DiffDrive::OnInitialize(const YAML::Node& config) {
   // parent frame ID
   odom_msg_ = ground_truth_msg_;
   odom_msg_.header.frame_id = odom_frame_id;
+
+  // set init odom pose
+  // odom_msg_.pose.pose.position.x = odom_pose[0];
+  // odom_msg_.pose.pose.position.y = odom_pose[1];
+  // odom_msg_.pose.pose.orientation = tf::createQuaternionMsgFromYaw(odom_pose[2]);
 
   // copy from std::array to boost array
   for (unsigned int i = 0; i < 36; i++) {
