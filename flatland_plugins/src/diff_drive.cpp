@@ -64,9 +64,11 @@ void DiffDrive::OnInitialize(const YAML::Node& config) {
   enable_odom_pub_ = reader.Get<bool>("enable_odom_pub", true);
   enable_twist_pub_ = reader.Get<bool>("enable_twist_pub", true);
   std::string body_name = reader.Get<std::string>("body");
-  std::string odom_frame_id = reader.Get<std::string>("odom_frame_id", "odom");
-  std::string ground_truth_frame_id =
-      reader.Get<std::string>("ground_truth_frame_id", odom_frame_id);
+  // std::string odom_frame_id = reader.Get<std::string>("odom_frame_id", "odom");
+  // std::string ground_truth_frame_id =
+  //     reader.Get<std::string>("ground_truth_frame_id", odom_frame_id);
+  std::string odom_frame_id = nh_.param<std::string>("odom_frame_id", "odom");
+  std::string ground_truth_frame_id = nh_.param<std::string>("ground_truth_frame_id", "map");
 
   std::string twist_topic = reader.Get<std::string>("twist_sub", "cmd_vel");
   std::string odom_topic =
@@ -138,6 +140,7 @@ void DiffDrive::OnInitialize(const YAML::Node& config) {
   // parent frame ID
   odom_msg_ = ground_truth_msg_;
   odom_msg_.header.frame_id = odom_frame_id;
+  ROS_WARN("[DiffDrive] odom frmae : %s", odom_frame_id.c_str());
 
   // copy from std::array to boost array
   for (unsigned int i = 0; i < 36; i++) {
