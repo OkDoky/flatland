@@ -56,8 +56,12 @@ ServiceManager::ServiceManager(SimulationManager *sim_man, World *world)
 
   spawn_model_service_ =
       nh.advertiseService("spawn_model", &ServiceManager::SpawnModel, this);
+  spawn_models_service_ =
+      nh.advertiseService("spawn_models", &ServiceManager::SpawnModels, this);
   delete_model_service_ =
       nh.advertiseService("delete_model", &ServiceManager::DeleteModel, this);
+  delete_models_service_ =
+    nh.advertiseService("delete_models", &ServiceManager::DeleteModels, this);
   move_model_service_ =
       nh.advertiseService("move_model", &ServiceManager::MoveModel, this);
   pause_service_ = nh.advertiseService("pause", &ServiceManager::Pause, this);
@@ -65,6 +69,11 @@ ServiceManager::ServiceManager(SimulationManager *sim_man, World *world)
       nh.advertiseService("resume", &ServiceManager::Resume, this);
   toggle_pause_service_ =
       nh.advertiseService("toggle_pause", &ServiceManager::TogglePause, this);
+  
+  spawn_model_from_string_service =
+      nh.advertiseService("spawn_model_from_string", &ServiceManager::SpawnModelFromString, this);
+
+  move_model_sub = nh.subscribe("move_model", 1, &ServiceManager::MoveModelMsg, this);
 
   if (spawn_model_service_) {
     ROS_INFO_NAMED("Service Manager", "Model spawning service ready to go");
@@ -110,6 +119,61 @@ bool ServiceManager::SpawnModel(flatland_msgs::SpawnModel::Request &request,
   return true;
 }
 
+
+// FOR SPAWN MODEL WITHOUT NEW FILE
+bool ServiceManager::SpawnModelFromString(
+    flatland_msgs::SpawnModel::Request &request,
+    flatland_msgs::SpawnModel::Response &response) {
+  ros::WallTime start = ros::WallTime::now();
+  ROS_DEBUG_NAMED("ServiceManager",
+                  "Model spawn requested from file, namespace(\"%s\"), "
+                  "name(\'%s\"), pose(%f,%f,%f)", request.ns.c_str(),
+                  request.name.c_str(), request.pose.x, request.pose.y,
+                  request.pose.theta);
+
+  Pose pose(request.pose.x, request.pose.y, request.pose.theta);
+
+  try {
+    world_->LoadModel(request.yaml_path, request.ns, request.name, pose, 1);
+    response.success = true;
+    response.message = "";
+  } catch (const std::exception &e) {
+    response.success = false;
+    response.message = std::string(e.what());
+    ROS_ERROR_NAMED("ServiceManager", "Failed to load model! Exception: %s",
+                    e.what());
+  }
+
+  ROS_DEBUG("Spawning models in flatland: %f", (ros::WallTime::now() - start).toSec());
+  return true;
+}
+///////
+
+
+bool ServiceManager::SpawnModels(flatland_msgs::SpawnModels::Request &request,
+                                flatland_msgs::SpawnModels::Response &response) {
+  ros::WallTime start = ros::WallTime::now();
+  ROS_DEBUG_NAMED("ServiceManager",
+                  "Request to spawn %ld models", request.models.size());
+  response.success = true;
+  response.message = "";
+  for(int i_model=0; i_model < request.models.size(); i_model++){
+    flatland_msgs::Model model = request.models[i_model];
+    Pose pose(model.pose.x, model.pose.y, model.pose.theta);
+
+    try {
+      world_->LoadModel(model.yaml_path, model.ns, model.name, pose);
+    } catch (const std::exception &e) {
+      response.success = false;
+      response.message = std::string(e.what());
+      ROS_ERROR_NAMED("ServiceManager", "Failed to load model! Exception: %s",
+                      e.what());
+    }
+  }
+  ROS_DEBUG("Spawning models in flatland: %f", (ros::WallTime::now() - start).toSec());
+  return true;
+}
+
 bool ServiceManager::DeleteModel(
     flatland_msgs::DeleteModel::Request &request,
     flatland_msgs::DeleteModel::Response &response) {
@@ -125,6 +189,26 @@ bool ServiceManager::DeleteModel(
     response.message = std::string(e.what());
   }
 
+  return true;
+}
+
+bool ServiceManager::DeleteModels(
+    flatland_msgs::DeleteModels::Request &request,
+    flatland_msgs::DeleteModels::Response &response) {
+
+  ros::WallTime start = ros::WallTime::now();
+  ROS_DEBUG_NAMED("ServiceManager", "Deleted %ld models",
+                  request.name.size());
+  response.success = true;
+  response.message = "";
+  for(int i_model = 0; i_model < request.name.size(); i_model++){
+    try {
+      world_->DeleteModel(request.name[i_model]);
+    } catch (const std::exception &e) {
+      response.success = false;
+      response.message = std::string(e.what());
+    }
+  }
   return true;
 }
 
@@ -145,6 +229,16 @@ bool ServiceManager::MoveModel(flatland_msgs::MoveModel::Request &request,
   }
 
   return true;
+}
+
+void ServiceManager::MoveModelMsg(flatland_msgs::MoveModelMsg msg) {
+  Pose pose(msg.pose.x, msg.pose.y, msg.pose.theta);
+
+  try {
+    world_->MoveModel(msg.name, pose);
+  } catch (const std::exception &e) {
+    return;
+  }
 }
 
 bool ServiceManager::Pause(std_srvs::Empty::Request &request,

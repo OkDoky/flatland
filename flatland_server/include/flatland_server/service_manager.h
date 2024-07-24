@@ -45,8 +45,11 @@
  */
 
 #include <flatland_msgs/DeleteModel.h>
+#include <flatland_msgs/DeleteModels.h>
 #include <flatland_msgs/MoveModel.h>
+#include <flatland_msgs/MoveModelMsg.h>
 #include <flatland_msgs/SpawnModel.h>
+#include <flatland_msgs/SpawnModels.h>
 #include <flatland_server/simulation_manager.h>
 #include <flatland_server/world.h>
 #include <ros/ros.h>
@@ -69,12 +72,17 @@ class ServiceManager {
   SimulationManager *sim_man_;  ///< a handle to the simulation manager
 
   ros::ServiceServer spawn_model_service_;   ///< service for spawning models
+  ros::ServiceServer spawn_models_service_;   ///< service for spawning models
   ros::ServiceServer delete_model_service_;  ///< service for deleting models
+  ros::ServiceServer delete_models_service_;  ///< service for deleting models
   ros::ServiceServer move_model_service_;    ///< service for moving models
   ros::ServiceServer pause_service_;   ///< service for pausing the simulation
   ros::ServiceServer resume_service_;  ///< service for resuming the simulation
   ros::ServiceServer toggle_pause_service_;  ///< service for toggling the
                                              /// pause state of the simulation
+  ros::ServiceServer spawn_model_from_string_service;   ///< service for spawning models
+
+  ros::Subscriber move_model_sub;
 
   /**
    * @brief Service manager constructor
@@ -91,6 +99,20 @@ class ServiceManager {
   bool SpawnModel(flatland_msgs::SpawnModel::Request &request,
                   flatland_msgs::SpawnModel::Response &response);
 
+  bool SpawnModelFromString(flatland_msgs::SpawnModel::Request &request,
+                  flatland_msgs::SpawnModel::Response &response);
+
+
+  /**
+   * @brief Callback for the spawn models service. 
+   * Allows the user to spawn several models at once.
+   * That saves costly service calls.
+   * @param[in] request Contains the request data for the service
+   * @param[in/out] response Contains the response for the service
+   */
+  bool SpawnModels(flatland_msgs::SpawnModels::Request &request,
+                  flatland_msgs::SpawnModels::Response &response);
+
   /**
    * @brief Callback for the delete model service
    * @param[in] request Contains the request data for the service
@@ -99,6 +121,16 @@ class ServiceManager {
   bool DeleteModel(flatland_msgs::DeleteModel::Request &request,
                    flatland_msgs::DeleteModel::Response &response);
 
+
+  /**
+   * @brief Callback for the delete models service
+   * Allows the user to delete several models at once.
+   * That saves costly service calls.
+   * @param[in] request Contains the request data for the service
+   * @param[in/out] response Contains the response for the service
+   */
+  bool DeleteModels(flatland_msgs::DeleteModels::Request &request,
+                   flatland_msgs::DeleteModels::Response &response);
   /**
    * @brief Callback for the move model service
    * @param[in] request Contains the request data for the service
@@ -107,6 +139,7 @@ class ServiceManager {
   bool MoveModel(flatland_msgs::MoveModel::Request &request,
                  flatland_msgs::MoveModel::Response &response);
 
+  void MoveModelMsg(flatland_msgs::MoveModelMsg msg);
   /**
    * @brief Callback for the pause service
    */

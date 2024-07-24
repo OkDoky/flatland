@@ -108,7 +108,10 @@ void InteractiveMarkerManager::createInteractiveMarker(
 
   // Send new interactive marker to server
   visualization_msgs::InteractiveMarker new_interactive_marker;
-  new_interactive_marker.header.frame_id = "map";
+  std::string ns = ros::this_node::getNamespace(); // /sim_1
+  int size_ns = ns.size();
+  ns = ns.substr(1,size_ns-1);
+  new_interactive_marker.header.frame_id = ns +"/map";
   new_interactive_marker.header.stamp = ros::Time(0);
   new_interactive_marker.name = model_name;
   new_interactive_marker.pose.position.x = pose.x;

@@ -45,37 +45,51 @@
  */
 
 #include "flatland_server/simulation_manager.h"
+#include <Box2D/Box2D.h>
 #include <flatland_server/debug_visualization.h>
 #include <flatland_server/layer.h>
 #include <flatland_server/model.h>
 #include <flatland_server/service_manager.h>
 #include <flatland_server/world.h>
 #include <ros/ros.h>
+#include <nav_msgs/OccupancyGrid.h>
+#include <std_msgs/String.h>
+#include <std_srvs/Empty.h>
+
 #include <exception>
 #include <limits>
 #include <string>
 
 namespace flatland_server {
 
-SimulationManager::SimulationManager(std::string world_yaml_file,
-                                     double update_rate, double step_size,
-                                     bool show_viz, double viz_pub_rate)
+SimulationManager::SimulationManager(std::string world_yaml_file, std::string map_layer_yaml_file,
+                                     std::string map_file, double update_rate, double step_size,
+                                     bool show_viz, double viz_pub_rate,
+                                     bool train_mode)
     : world_(nullptr),
       update_rate_(update_rate),
       step_size_(step_size),
       show_viz_(show_viz),
       viz_pub_rate_(viz_pub_rate),
-      world_yaml_file_(world_yaml_file) {
+      world_yaml_file_(world_yaml_file),
+      map_layer_yaml_file_(map_layer_yaml_file),
+      map_file_(map_file),
+      train_mode_(train_mode),
+      current_episode(-1) {
   ROS_INFO_NAMED("SimMan",
-                 "Simulation params: world_yaml_file(%s) update_rate(%f), "
+                 "Simulation params: world_yaml_file(%s), map_layer_yaml_file(%s), map_file(%s), update_rate(%f), "
                  "step_size(%f) show_viz(%s), viz_pub_rate(%f)",
-                 world_yaml_file_.c_str(), update_rate_, step_size_,
+                 world_yaml_file_.c_str(), map_layer_yaml_file_.c_str(), map_file_.c_str(), update_rate_, step_size_,
                  show_viz_ ? "true" : "false", viz_pub_rate_);
+  timekeeper.SetMaxStepSize(step_size_);
 }
 
 void SimulationManager::Main() {
   ROS_INFO_NAMED("SimMan", "Initializing...");
   run_simulator_ = true;
+  int pre_run_steps = fmin(5 / step_size_, 1000);
+
+  ros::WallRate rate(update_rate_);
 
   try {
     world_ = World::MakeWorld(world_yaml_file_);
@@ -93,13 +107,19 @@ void SimulationManager::Main() {
   double max_cycle_util = 0;
   double viz_update_period = 1.0f / viz_pub_rate_;
   ServiceManager service_manager(this, world_);
-  Timekeeper timekeeper;
 
-  ros::WallRate rate(update_rate_);
-  timekeeper.SetMaxStepSize(step_size_);
+
   ROS_INFO_NAMED("SimMan", "Simulation loop started");
 
+  ros::NodeHandle n;
+
+  ros::Subscriber goal_sub = n.subscribe("map", 1, &SimulationManager::callback, this);
+  ros::Subscriber step_world = n.subscribe("step_world", 1, &SimulationManager::callback_StepWorld, this);
+  step_world_srv = n.advertiseService("step_world", &SimulationManager::StepWorld, this);
+
   while (ros::ok() && run_simulator_) {
+
+
     // for updating visualization at a given rate
     // see flatland_plugins/update_timer.cpp for this formula
     double f = 0.0;
@@ -112,8 +132,11 @@ void SimulationManager::Main() {
     }
     bool update_viz = ((f >= 0.0) && (f < rate.expectedCycleTime().toSec()));
 
-    world_->Update(timekeeper);  // Step physics by ros cycle time
-
+    if (train_mode_ == false || pre_run_steps > 0) {
+      world_->Update(timekeeper);  // Step physics by ros cycle time
+      pre_run_steps = fmax(--pre_run_steps, 0);
+    }
+ 
     if (show_viz_ && update_viz) {
       world_->DebugVisualize(false);  // no need to update layer
       DebugVisualization::Get().Publish(
@@ -123,20 +146,6 @@ void SimulationManager::Main() {
     ros::spinOnce();
     rate.sleep();
 
-    iterations++;
-
-    double cycle_time = rate.cycleTime().toSec() * 1000;
-    double expected_cycle_time = rate.expectedCycleTime().toSec() * 1000;
-    double cycle_util = cycle_time / expected_cycle_time * 100;  // in percent
-    double factor = timekeeper.GetStepSize() * 1000 / expected_cycle_time;
-    min_cycle_util = std::min(cycle_util, min_cycle_util);
-    if (iterations > 10) max_cycle_util = std::max(cycle_util, max_cycle_util);
-    filtered_cycle_util = 0.99 * filtered_cycle_util + 0.01 * cycle_util;
-
-    ROS_DEBUG(
-        "SimMan",
-        "utilization: min %.1f%% max %.1f%% ave %.1f%%  factor: %.1f",
-        min_cycle_util, max_cycle_util, filtered_cycle_util, factor);
   }
   ROS_INFO_NAMED("SimMan", "Simulation loop ended");
 
@@ -147,5 +156,41 @@ void SimulationManager::Shutdown() {
   ROS_INFO_NAMED("SimMan", "Shutdown called");
   run_simulator_ = false;
 }
+
+void SimulationManager::callback_StepWorld(
+    flatland_msgs::StepWorld msg) {
+  int required_steps;
+  float t = msg.required_time;
+  if(t == 0.0) {
+    required_steps = 1;
+  } else {
+    required_steps = ceil(t/step_size_);
+  }
+  
+  for (int i = 0; i < required_steps; i++) {
+    world_->Update(timekeeper);  // Step physics by ros cycle time
+  }
+}
+
+bool SimulationManager::StepWorld(
+  std_srvs::Empty::Request &request,
+  std_srvs::Empty::Response &response 
+) {
+  world_->Update(timekeeper);  // Step physics by ros cycle time
+  return true;
+}
+
+void SimulationManager::callback(nav_msgs::OccupancyGrid msg) {
+  if (train_mode_ && map_file_ == "random_map"){
+    YamlReader world_reader = YamlReader(map_layer_yaml_file_);
+    YamlReader layers_reader = world_reader.Subnode("layers", YamlReader::LIST);
+
+    // replace the existing world layers with layers loaded from the provided yaml file
+    world_->LoadLayers(layers_reader);
+    world_->DebugVisualize(true);
+    ROS_INFO_NAMED("World", "Map Layer loaded");
+  }
+
+  }
 
 };  // namespace flatland_server

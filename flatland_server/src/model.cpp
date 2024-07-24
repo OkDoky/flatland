@@ -77,7 +77,13 @@ Model::~Model() {
 Model *Model::MakeModel(b2World *physics_world, CollisionFilterRegistry *cfr,
                         const std::string &model_yaml_path,
                         const std::string &ns, const std::string &name) {
-  YamlReader reader(model_yaml_path);
+  return Model::MakeModel(physics_world, cfr, model_yaml_path, ns, name, 0);
+}
+
+Model *Model::MakeModel(b2World *physics_world, CollisionFilterRegistry *cfr,
+                        const std::string &model_yaml_path,
+                        const std::string &ns, const std::string &name, int source) {
+  YamlReader reader(model_yaml_path, source);
   reader.SetErrorInfo("model " + Q(name));
 
   Model *m = new Model(physics_world, cfr, ns, name);
