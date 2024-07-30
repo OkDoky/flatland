@@ -125,10 +125,10 @@ class Laser : public ModelPlugin {
   void OnInitialize(const YAML::Node &config) override;
 
   /**
-   * @brief Called when just before physics update
+   * @brief Called when just after physics update
    * @param[in] timekeeper Object managing the simulation time
    */
-  void BeforePhysicsStep(const Timekeeper &timekeeper) override;
+  void AfterPhysicsStep(const Timekeeper &timekeeper) override;
 
   /**
    * @brief Method that contains all of the laser range calculations
