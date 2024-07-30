@@ -79,12 +79,18 @@ int main(int argc, char **argv) {
   ros::NodeHandle node_handle("~");
 
   // Load parameters
+  
   std::string world_path;  // The file path to the world.yaml file
   if (!node_handle.getParam("world_path", world_path)) {
     ROS_FATAL_NAMED("Node", "No world_path parameter given!");
     ros::shutdown();
     return 1;
   }
+  std::string map_layer_path;
+  node_handle.getParam("map_layer_path", map_layer_path);
+
+  std::string map_file;
+  node_handle.getParam("map_file", map_file);
 
   float update_rate = 200.0;  // The physics update rate (Hz)
   node_handle.getParam("update_rate", update_rate);
@@ -98,9 +104,12 @@ int main(int argc, char **argv) {
   float viz_pub_rate = 30.0;
   node_handle.getParam("viz_pub_rate", viz_pub_rate);
 
+  bool train_mode = false;
+  node_handle.getParam("train_mode", train_mode);
+
   // Create simulation manager object
   simulation_manager = new flatland_server::SimulationManager(
-      world_path, update_rate, step_size, show_viz, viz_pub_rate);
+      world_path, map_layer_path, map_file, update_rate, step_size, show_viz, viz_pub_rate,train_mode);
 
   // Register sigint shutdown handler
   signal(SIGINT, SigintHandler);

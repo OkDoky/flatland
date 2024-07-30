@@ -55,6 +55,7 @@
 #include <boost/filesystem.hpp>
 #include <map>
 #include <string>
+#include <set>
 
 namespace flatland_server {
 
@@ -241,8 +242,16 @@ void World::LoadWorldPlugins(YamlReader &world_plugin_reader, World *world,
     }
   }
 }
+
 void World::LoadModel(const std::string &model_yaml_path, const std::string &ns,
                       const std::string &name, const Pose &pose) {
+  this->LoadModel(model_yaml_path, ns, name, pose, 0);
+}
+
+// SOURCE = 0 Load from file
+// SOURCE = 1 Load from string
+void World::LoadModel(const std::string &model_yaml_path, const std::string &ns,
+                      const std::string &name, const Pose &pose, int source) {
   // ensure no duplicate model names
   if (std::count_if(models_.begin(), models_.end(),
                     [&](Model *m) { return m->name_ == name; }) >= 1) {
@@ -254,11 +263,17 @@ void World::LoadModel(const std::string &model_yaml_path, const std::string &ns,
     abs_path = world_yaml_dir_ / abs_path;
   }
 
-  ROS_INFO_NAMED("World", "Loading model from path=\"%s\"",
+  ROS_DEBUG_NAMED("World", "Loading model from path=\"%s\"",
                  abs_path.string().c_str());
 
-  Model *m =
-      Model::MakeModel(physics_world_, &cfr_, abs_path.string(), ns, name);
+  Model *m =Model::MakeModel(
+        physics_world_, 
+        &cfr_, 
+        source == 0 ? abs_path.string() : model_yaml_path, 
+        ns, 
+        name, 
+        source
+  );
   m->TransformAll(pose);
 
   try {

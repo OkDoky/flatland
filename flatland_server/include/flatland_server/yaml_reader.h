@@ -106,6 +106,7 @@ class YamlReader {
    * @param[in] path Path to the yaml file
    */
   YamlReader(const std::string &path);
+  YamlReader(const std::string &path, int source);
 
   /**
    * @brief Use this method to set the entry location and entry name for error
