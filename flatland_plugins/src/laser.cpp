@@ -128,7 +128,7 @@ void Laser::OnInitialize(const YAML::Node& config) {
   laser_tf_.transform.rotation.w = q.w();
 }
 
-void Laser::BeforePhysicsStep(const Timekeeper& timekeeper) {
+void Laser::AfterPhysicsStep(const Timekeeper &timekeeper) {
   // keep the update rate
   if (!update_timer_.CheckUpdate(timekeeper)) {
     return;
@@ -136,9 +136,7 @@ void Laser::BeforePhysicsStep(const Timekeeper& timekeeper) {
 
   // only compute and publish when the number of subscribers is not zero
   if (scan_publisher_.getNumSubscribers() > 0) {
-    //START_PROFILE(timekeeper, "compute laser range");
     ComputeLaserRanges();
-    //END_PROFILE(timekeeper, "compute laser range");
     laser_scan_.header.stamp = timekeeper.GetSimTime();
     scan_publisher_.publish(laser_scan_);
   }

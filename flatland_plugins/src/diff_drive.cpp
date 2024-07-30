@@ -64,9 +64,6 @@ void DiffDrive::OnInitialize(const YAML::Node& config) {
   enable_odom_pub_ = reader.Get<bool>("enable_odom_pub", true);
   enable_twist_pub_ = reader.Get<bool>("enable_twist_pub", true);
   std::string body_name = reader.Get<std::string>("body");
-  // std::string odom_frame_id = reader.Get<std::string>("odom_frame_id", "odom");
-  // std::string ground_truth_frame_id =
-  //     reader.Get<std::string>("ground_truth_frame_id", odom_frame_id);
   std::string odom_frame_id = nh_.param<std::string>("odom_frame_id", "odom");
   std::string ground_truth_frame_id = nh_.param<std::string>("ground_truth_frame_id", "map");
 
@@ -140,7 +137,6 @@ void DiffDrive::OnInitialize(const YAML::Node& config) {
   // parent frame ID
   odom_msg_ = ground_truth_msg_;
   odom_msg_.header.frame_id = odom_frame_id;
-  ROS_WARN("[DiffDrive] odom frmae : %s", odom_frame_id.c_str());
 
   // copy from std::array to boost array
   for (unsigned int i = 0; i < 36; i++) {
@@ -174,7 +170,7 @@ void DiffDrive::OnInitialize(const YAML::Node& config) {
                   odom_twist_noise[1], odom_twist_noise[2], pub_rate);
 }
 
-void DiffDrive::BeforePhysicsStep(const Timekeeper& timekeeper) {
+void DiffDrive::AfterPhysicsStep(const Timekeeper& timekeeper) {
   bool publish = update_timer_.CheckUpdate(timekeeper);
 
   b2Body* b2body = body_->physics_body_;
@@ -274,6 +270,34 @@ void DiffDrive::BeforePhysicsStep(const Timekeeper& timekeeper) {
     tf_broadcaster.sendTransform(odom_tf);
   }
 
+}
+
+void DiffDrive::BeforePhysicsStep(const Timekeeper& timekeeper) {
+  b2Body* b2body = body_->physics_body_;
+
+  b2Vec2 position = b2body->GetPosition();
+  float angle = b2body->GetAngle();
+
+  // we apply the twist velocities, this must be done every physics step to make
+  // sure Box2D solver applies the correct velocity through out. The velocity
+  // given in the twist message should be in the local frame
+  b2Vec2 linear_vel_local(twist_msg_.linear.x, 0);
+  b2Vec2 linear_vel = b2body->GetWorldVector(linear_vel_local);
+  float angular_vel = twist_msg_.angular.z;  // angular is independent of frames
+
+  // we want the velocity vector in the world frame at the center of mass
+
+  // V_cm = V_o + W x r_cm/o
+  // velocity at center of mass equals to the velocity at the body origin plus,
+  // angular velocity cross product the displacement from the body origin to the
+  // center of mass
+
+  // r is the vector from body origin to the CM in world frame
+  b2Vec2 r = b2body->GetWorldCenter() - position;
+  b2Vec2 linear_vel_cm = linear_vel + angular_vel * b2Vec2(-r.y, r.x);
+
+  b2body->SetLinearVelocity(linear_vel_cm);
+  b2body->SetAngularVelocity(angular_vel);
 }
 }
 
